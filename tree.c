@@ -154,6 +154,30 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
 //   - object_write    : save that binary buffer to the store as OBJ_TREE
 //
 // Returns 0 on success, -1 on error.
+static int write_tree_level(const IndexEntry *entries, int count, int depth, ObjectID *id_out) {
+    Tree tree;
+    tree.count = 0;
+    int i = 0;
+
+    while (i < count) {
+        if (tree.count >= MAX_TREE_ENTRIES) return -1; // Exceeded max entries per tree
+
+        TreeEntry *te = &tree.entries[tree.count];
+        const char *rel_path = entries[i].path + depth;
+        char *slash = strchr(rel_path, '/');
+
+        if (slash == NULL) {
+            // 1. Base case: It's a file at the current directory level
+            te->mode = entries[i].mode;
+            if (te->mode == 0) te->mode = 0100644; // Fallback to MODE_FILE
+
+            strncpy(te->name, rel_path, sizeof(te->name) - 1);
+            te->name[sizeof(te->name) - 1] = '\0';
+            te->hash = entries[i].hash;
+
+            tree.count++;
+            i++; 
+        }
 int tree_from_index(ObjectID *id_out) {
     Index idx;
     idx.entries = NULL;
