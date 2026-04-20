@@ -10,6 +10,7 @@
 //   "100644 hello.txt\0" followed by 32 raw bytes of SHA-256
 
 #include "tree.h"
+#include "index.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,27 +26,7 @@
 // object_write isn't in pes.h or tree.h, so we declare it here to avoid compiler warnings.
 extern int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
 
-// If you have an "index.h", uncomment the next line and delete the fallback structs below.
-// #include "index.h"
 
-#ifndef INDEX_H
-#define INDEX_H
-// Fallback definitions: Adjust these if your actual index struct looks different!
-typedef struct {
-    uint32_t mode;
-    ObjectID hash;
-    char path[512];
-} IndexEntry;
-
-typedef struct {
-    IndexEntry *entries;
-    int count;
-    int capacity;
-} Index;
-
-// Assuming this is implemented elsewhere (e.g., index.c)
-extern int index_load(Index *idx);
-#endif
 
 // ─── PROVIDED ───────────────────────────────────────────────────────────────
 
@@ -224,7 +205,6 @@ static int write_tree_level(const IndexEntry *entries, int count, int depth, Obj
 }
 int tree_from_index(ObjectID *id_out) {
     Index idx;
-    idx.entries = NULL;
     idx.count = 0;
     
     // Load the index (staged files) into memory
@@ -234,11 +214,6 @@ int tree_from_index(ObjectID *id_out) {
 
     // Kick off the recursion starting from the root (depth 0)
     int rc = write_tree_level(idx.entries, idx.count, 0, id_out);
-
-    // Clean up dynamically allocated index entries if your index_load does so
-    if (idx.entries) {
-        free(idx.entries);
-    }
 
     return rc;
 }
