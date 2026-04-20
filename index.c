@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <time.h>
 
 // ─── PROVIDED ────────────────────────────────────────────────────────────────
 
@@ -212,6 +213,19 @@ int index_save(const Index *index) {
                 (unsigned long long)index->entries[i].size, 
                 index->entries[i].path);
     }
+    // 4. Force data to disk to guarantee atomic integrity before renaming
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+
+    // 5. Atomically rename the temporary file over the actual .pes/index
+    if (rename(tmp_path, INDEX_FILE) < 0) {
+        unlink(tmp_path); // Cleanup on failure
+        return -1;
+    }
+
+    return 0;
+}
 
 // Stage a file for the next commit.
 //
