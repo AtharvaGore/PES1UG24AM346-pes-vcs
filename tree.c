@@ -177,7 +177,39 @@ static int write_tree_level(const IndexEntry *entries, int count, int depth, Obj
 
             tree.count++;
             i++; 
+        } else {
+            // 2. Recursive case: It's a subdirectory
+            size_t dir_name_len = slash - rel_path;
+            int sub_count = 1;
+            
+            // Count how many staged files belong to this exact subdirectory
+            while (i + sub_count < count) {
+                const char *next_path = entries[i + sub_count].path + depth;
+                if (strncmp(next_path, rel_path, dir_name_len) == 0 && next_path[dir_name_len] == '/') {
+                    sub_count++;
+                } else {
+                    break;
+                }
+            }
+
+            // Recursively build the subtree
+            ObjectID dir_hash;
+            int new_depth = depth + dir_name_len + 1; // +1 to skip over the '/'
+            if (write_tree_level(&entries[i], sub_count, new_depth, &dir_hash) != 0) {
+                return -1;
+            }
+
+            // Record the directory itself in the current tree level
+            te->mode = 0040000; // MODE_DIR
+            size_t copy_len = dir_name_len < (sizeof(te->name) - 1) ? dir_name_len : (sizeof(te->name) - 1);
+            strncpy(te->name, rel_path, copy_len);
+            te->name[copy_len] = '\0';
+            te->hash = dir_hash;
+
+            tree.count++;
+            i += sub_count; // Skip over all entries processed by the recursive call
         }
+    }
 int tree_from_index(ObjectID *id_out) {
     Index idx;
     idx.entries = NULL;
