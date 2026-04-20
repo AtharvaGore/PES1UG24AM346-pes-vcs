@@ -186,6 +186,12 @@ int index_load(Index *index) {
 //   - rename                           : atomically moving the temp file over the old index
 //
 // Returns 0 on success, -1 on error.
+// Helper function for qsort to sort entries alphabetically by path
+static int compare_index_entries(const void *a, const void *b) {
+    const IndexEntry *entry_a = (const IndexEntry *)a;
+    const IndexEntry *entry_b = (const IndexEntry *)b;
+    return strcmp(entry_a->path, entry_b->path);
+}
 int index_save(const Index *index) {
     // Standard Git behavior requires the index to be sorted alphabetically by path.
     // Since `index` is passed as const but we need to ensure the memory array 
