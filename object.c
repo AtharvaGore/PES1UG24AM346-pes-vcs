@@ -169,6 +169,24 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         return -1;
     }
     close(fd);
+
+    // 7. rename() the temp file to the final path (atomic on POSIX)
+    if (rename(tmp_path, path) < 0) {
+        unlink(tmp_path);
+        return -1;
+    }
+
+    // 8. Open and fsync() the shard directory to persist the rename
+    if (last_slash) {
+        int dir_fd = open(shard_dir, O_RDONLY);
+        if (dir_fd >= 0) {
+            fsync(dir_fd);
+            close(dir_fd);
+        }
+    }
+
+    // 9. Hash is already stored in *id_out
+    return 0;
     (void)type; (void)data; (void)len; (void)id_out;
     return -1;
 }
@@ -197,6 +215,35 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 // Returns 0 on success, -1 on error (file not found, corrupt, etc.).
 int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_t *len_out) {
     // TODO: Implement
+    // 1. Build the file path from the hash
+    char path[512];
+    object_path(id, path, sizeof(path));
+
+    // 2. Open and read the entire file using FILE* as hinted
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (file_size < 0) {
+        fclose(f);
+        return -1;
+    }
+
+    unsigned char *full_data = malloc((size_t)file_size);
+    if (!full_data) {
+        fclose(f);
+        return -1;
+    }
+
+    if (fread(full_data, 1, file_size, f) != (size_t)file_size) {
+        free(full_data);
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
     (void)id; (void)type_out; (void)data_out; (void)len_out;
     return -1;
 }
