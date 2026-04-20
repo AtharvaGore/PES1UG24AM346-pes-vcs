@@ -194,8 +194,20 @@ int head_update(const ObjectID *new_commit) {
 //
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *commit_id_out) {
-    // TODO: Implement commit creation
-    // (See Lab Appendix for logical steps)
-    (void)message; (void)commit_id_out;
-    return -1;
-}
+    Commit new_commit;
+    // Zero out the struct to avoid any garbage data in padding/unused fields
+    memset(&new_commit, 0, sizeof(Commit));
+
+    // 1. Build the tree hierarchy from the index and get the root hash
+    if (tree_from_index(&new_commit.tree) != 0) {
+        fprintf(stderr, "error: failed to build tree from index\n");
+        return -1;
+    }
+
+    // 2. Read the current HEAD to determine the parent commit.
+    // If head_read fails, we assume this is the repository's initial commit.
+    if (head_read(&new_commit.parent) == 0) {
+        new_commit.has_parent = 1;
+    } else {
+        new_commit.has_parent = 0;
+    }
