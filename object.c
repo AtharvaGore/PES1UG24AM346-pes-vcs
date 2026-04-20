@@ -187,8 +187,6 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
 
     // 9. Hash is already stored in *id_out
     return 0;
-    (void)type; (void)data; (void)len; (void)id_out;
-    return -1;
 }
 
 // Read an object from the store.
@@ -267,6 +265,39 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
         free(full_data);
         return -1; // Malformed header formatting
     }
-    (void)id; (void)type_out; (void)data_out; (void)len_out;
-    return -1;
+    // 5. Set *type_out to the parsed ObjectType
+    if (strncmp(type_str, "blob", 4) == 0) *type_out = OBJ_BLOB;
+    else if (strncmp(type_str, "tree", 4) == 0) *type_out = OBJ_TREE;
+    else if (strncmp(type_str, "commit", 6) == 0) *type_out = OBJ_COMMIT;
+    else {
+        free(full_data);
+        return -1; // Unknown object type in header
+    }
+
+    // Determine the actual length of the payload
+    size_t header_len = null_pos - (char *)full_data;
+    size_t actual_data_len = file_size - header_len - 1;
+
+    // Cross-check header size against physical size
+    if (actual_data_len != parsed_len) {
+        free(full_data);
+        return -1; // Header size does not match file size
+    }
+
+    // 6. Allocate a buffer, copy the data portion, set *data_out and *len_out
+    *len_out = actual_data_len;
+    
+    // Even if length is 0, we provide a valid malloc pointer so the caller can safely free() it
+    *data_out = malloc(actual_data_len == 0 ? 1 : actual_data_len);
+    if (!*data_out) {
+        free(full_data);
+        return -1; // Out of memory
+    }
+    
+    if (actual_data_len > 0) {
+        memcpy(*data_out, null_pos + 1, actual_data_len);
+    }
+
+    free(full_data);
+    return 0;
 }
