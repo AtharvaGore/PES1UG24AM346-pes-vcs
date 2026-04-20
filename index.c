@@ -186,11 +186,32 @@ int index_load(Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_save(const Index *index) {
-    // TODO: Implement atomic index saving
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
-}
+    // Standard Git behavior requires the index to be sorted alphabetically by path.
+    // Since `index` is passed as const but we need to ensure the memory array 
+    // is sorted before writing, we cast away const for the qsort. 
+    Index *mut_index = (Index *)index;
+    qsort(mut_index->entries, mut_index->count, sizeof(IndexEntry), compare_index_entries);
+
+    // 1. Generate a temporary path based on PID to prevent race conditions
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%d", INDEX_FILE, getpid());
+
+    // 2. Open temporary file
+    FILE *f = fopen(tmp_path, "w");
+    if (!f) return -1;
+
+    // 3. Write each entry out to the file
+    for (int i = 0; i < index->count; i++) {
+        char hex[HASH_HEX_SIZE + 1];
+        hash_to_hex(&index->entries[i].hash, hex);
+
+        fprintf(f, "%06o %s %lld %llu %s\n", 
+                index->entries[i].mode, 
+                hex, 
+                (long long)index->entries[i].mtime_sec, 
+                (unsigned long long)index->entries[i].size, 
+                index->entries[i].path);
+    }
 
 // Stage a file for the next commit.
 //
