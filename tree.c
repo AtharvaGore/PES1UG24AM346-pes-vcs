@@ -22,6 +22,31 @@
 #define MODE_EXEC      0100755
 #define MODE_DIR       0040000
 
+// object_write isn't in pes.h or tree.h, so we declare it here to avoid compiler warnings.
+extern int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
+// If you have an "index.h", uncomment the next line and delete the fallback structs below.
+// #include "index.h"
+
+#ifndef INDEX_H
+#define INDEX_H
+// Fallback definitions: Adjust these if your actual index struct looks different!
+typedef struct {
+    uint32_t mode;
+    ObjectID hash;
+    char path[512];
+} IndexEntry;
+
+typedef struct {
+    IndexEntry *entries;
+    int count;
+    int capacity;
+} Index;
+
+// Assuming this is implemented elsewhere (e.g., index.c)
+extern int index_load(Index *idx);
+#endif
+
 // ─── PROVIDED ───────────────────────────────────────────────────────────────
 
 // Determine the object mode for a filesystem path.
