@@ -237,8 +237,70 @@ int index_save(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
-    // TODO: Implement file staging
-    // (See Lab Appendix for logical steps)
-    (void)index; (void)path;
-    return -1;
+    struct stat st;
+    if (lstat(path, &st) != 0) {
+        fprintf(stderr, "error: could not stat '%s'\n", path);
+        return -1;
+    }
+
+    // Determine the Git-compatible mode based on the real filesystem mode
+    uint32_t mode;
+    if (S_ISDIR(st.st_mode)) {
+        mode = 0040000;
+    } else if (st.st_mode & S_IXUSR) {
+        mode = 0100755; // Executable
+    } else {
+        mode = 0100644; // Regular file
+    }
+
+    // Read the file's contents into memory
+    void *data = NULL;
+    if (st.st_size > 0) {
+        FILE *f = fopen(path, "rb");
+        if (!f) {
+            fprintf(stderr, "error: could not open '%s'\n", path);
+            return -1;
+        }
+
+        data = malloc(st.st_size);
+        if (!data) {
+            fclose(f);
+            return -1;
+        }
+
+        if (fread(data, 1, st.st_size, f) != (size_t)st.st_size) {
+            free(data);
+            fclose(f);
+            return -1;
+        }
+        fclose(f);
+    }
+    ObjectID id;
+    // (If the file is completely empty, data is NULL but st_size is 0, which object_write handles)
+    if (object_write(OBJ_BLOB, data ? data : "", st.st_size, &id) != 0) {
+        free(data);
+        return -1;
+    }
+    free(data);
+
+    // Check if the file is already tracked in the index
+    IndexEntry *entry = index_find(index, path);
+    
+    if (!entry) {
+        // Ensure you don't overflow the array size (assuming typical fixed-array limits)
+        // If your Index struct uses dynamic allocation, place a realloc() check here instead.
+        entry = &index->entries[index->count];
+        index->count++;
+    }
+
+    // Update/Set the entry data
+    entry->mode = mode;
+    entry->hash = id;
+    entry->size = st.st_size;
+    entry->mtime_sec = st.st_mtime;
+    strncpy(entry->path, path, sizeof(entry->path) - 1);
+    entry->path[sizeof(entry->path) - 1] = '\0';
+
+    // Flush to disk
+    return index_save(index);
 }
