@@ -211,3 +211,19 @@ int commit_create(const char *message, ObjectID *commit_id_out) {
     } else {
         new_commit.has_parent = 0;
     }
+    // 3. Populate authorship and temporal metadata
+    strncpy(new_commit.author, pes_author(), sizeof(new_commit.author) - 1);
+    new_commit.author[sizeof(new_commit.author) - 1] = '\0';
+    
+    new_commit.timestamp = (uint64_t)time(NULL);
+    
+    strncpy(new_commit.message, message, sizeof(new_commit.message) - 1);
+    new_commit.message[sizeof(new_commit.message) - 1] = '\0';
+
+    // 4. Serialize the Commit struct into a standard text buffer
+    void *commit_data = NULL;
+    size_t commit_len = 0;
+    if (commit_serialize(&new_commit, &commit_data, &commit_len) != 0) {
+        fprintf(stderr, "error: failed to serialize commit\n");
+        return -1;
+    }
