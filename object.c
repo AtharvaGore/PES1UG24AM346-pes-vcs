@@ -128,6 +128,47 @@ int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out
         free(full_data);
         return 0; // Success: Object already stored
     }
+
+    char path[512];
+    object_path(id_out, path, sizeof(path));
+
+    // 4. Create shard directory (.pes/objects/XX/)
+    char shard_dir[512];
+    strncpy(shard_dir, path, sizeof(shard_dir));
+    char *last_slash = strrchr(shard_dir, '/');
+    if (last_slash) {
+        *last_slash = '\0';
+        // Ignore the return value; it will fail if the directory already exists (which is fine).
+        mkdir(shard_dir, 0755); 
+    }
+
+    // 5. Write to a temporary file in the same shard directory
+    char tmp_path[512];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%d", path, getpid());
+
+    int fd = open(tmp_path, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    if (fd < 0) {
+        free(full_data);
+        return -1;
+    }
+
+    if (write(fd, full_data, full_size) != (ssize_t)full_size) {
+        close(fd);
+        unlink(tmp_path);
+        free(full_data);
+        return -1;
+    }
+    
+    // We don't need the buffer anymore
+    free(full_data);
+
+    // 6. fsync() the temporary file to ensure data reaches disk
+    if (fsync(fd) < 0) {
+        close(fd);
+        unlink(tmp_path);
+        return -1;
+    }
+    close(fd);
     (void)type; (void)data; (void)len; (void)id_out;
     return -1;
 }
