@@ -135,10 +135,44 @@ int index_status(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_load(Index *index) {
-    // TODO: Implement index loading
-    // (See Lab Appendix for logical steps)
-    (void)index;
-    return -1;
+    index->count = 0;
+
+    FILE *f = fopen(INDEX_FILE, "r");
+    if (!f) {
+        // If the file doesn't exist, this is likely a fresh repository.
+        // It is not an error; we just start with an empty index.
+        return 0; 
+    }
+
+    char line[1024];
+    while (fgets(line, sizeof(line), f)) {
+        // Prevent array out-of-bounds if the index is corrupted or too large
+        // (Assuming MAX_INDEX_ENTRIES is defined somewhere in your header; 
+        // if using dynamic sizing, adapt this to a realloc block)
+        IndexEntry *entry = &index->entries[index->count];
+        
+        char hex[HASH_HEX_SIZE + 1];
+        unsigned int mode;
+        long long mtime;
+        unsigned long long size;
+
+        // Parse: <mode-octal> <64-char-hex-hash> <mtime-seconds> <size> <path>
+        // We use wide integer types for parsing to avoid 32-bit/64-bit cross-platform issues.
+        if (sscanf(line, "%o %64s %lld %llu %511s", 
+                   &mode, hex, &mtime, &size, entry->path) == 5) {
+            
+            entry->mode = (uint32_t)mode;
+            entry->mtime_sec = (uint64_t)mtime;
+            entry->size = (size_t)size;
+            
+            if (hex_to_hash(hex, &entry->hash) == 0) {
+                index->count++;
+            }
+        }
+    }
+
+    fclose(f);
+    return 0;
 }
 
 // Save the index to .pes/index atomically.
