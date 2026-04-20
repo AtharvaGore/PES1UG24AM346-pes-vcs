@@ -210,6 +210,18 @@ static int write_tree_level(const IndexEntry *entries, int count, int depth, Obj
             i += sub_count; // Skip over all entries processed by the recursive call
         }
     }
+    // 3. Serialize and write the constructed tree to the object store
+    void *buffer = NULL;
+    size_t len = 0;
+    if (tree_serialize(&tree, &buffer, &len) != 0) {
+        return -1;
+    }
+
+    int rc = object_write(OBJ_TREE, buffer, len, id_out);
+    free(buffer);
+
+    return rc;
+}
 int tree_from_index(ObjectID *id_out) {
     Index idx;
     idx.entries = NULL;
