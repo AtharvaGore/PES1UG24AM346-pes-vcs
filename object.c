@@ -244,6 +244,29 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
         return -1;
     }
     fclose(f);
+
+    // 4. Verify integrity: recompute the SHA-256 and compare
+    ObjectID computed_id;
+    compute_hash(full_data, file_size, &computed_id);
+    if (memcmp(id->hash, computed_id.hash, HASH_SIZE) != 0) {
+        free(full_data);
+        return -1; // Corruption detected
+    }
+
+    // 3. Parse the header to extract the type string and size
+    char *null_pos = memchr(full_data, '\0', file_size);
+    if (!null_pos) {
+        free(full_data);
+        return -1; // Malformed object (missing null terminator)
+    }
+
+    char type_str[16];
+    size_t parsed_len;
+    // We can safely read as a string because we found a null terminator bounding it
+    if (sscanf((char *)full_data, "%15s %zu", type_str, &parsed_len) != 2) {
+        free(full_data);
+        return -1; // Malformed header formatting
+    }
     (void)id; (void)type_out; (void)data_out; (void)len_out;
     return -1;
 }
