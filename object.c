@@ -95,6 +95,39 @@ int object_exists(const ObjectID *id) {
 // Returns 0 on success, -1 on error.
 int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out) {
     // TODO: Implement
+    const char *type_str = NULL;
+    
+    // Determine the type string based on the enum. 
+    // Modify these enum names if your pes.h defines them differently.
+    if (type == OBJ_BLOB) type_str = "blob";
+    else if (type == OBJ_TREE) type_str = "tree";
+    else if (type == OBJ_COMMIT) type_str = "commit";
+    else return -1; // Unknown object type
+
+    // 1. Build the full object: header ("blob 16\0") + data
+    char header[64];
+    int header_len = snprintf(header, sizeof(header), "%s %zu", type_str, len);
+    if (header_len < 0) return -1;
+    
+    size_t full_size = header_len + 1 + len;
+    unsigned char *full_data = malloc(full_size);
+    if (!full_data) return -1;
+
+    // Construct the memory buffer (Header + NULL byte + Data)
+    memcpy(full_data, header, header_len);
+    full_data[header_len] = '\0';
+    if (len > 0) {
+        memcpy(full_data + header_len + 1, data, len);
+    }
+
+    // 2. Compute SHA-256 hash of the FULL object
+    compute_hash(full_data, full_size, id_out);
+
+    // 3. Check if object already exists (deduplication)
+    if (object_exists(id_out)) {
+        free(full_data);
+        return 0; // Success: Object already stored
+    }
     (void)type; (void)data; (void)len; (void)id_out;
     return -1;
 }
